@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Stickman Cricket</title>
+<meta name="description" content="A quick stickman cricket batting game. Time your shot, ground it for runs or loft it for six.">
+<meta name="theme-color" content="#14532d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root {
+    --panel: rgba(10, 20, 15, 0.78);
+    --panel-solid: #0f1d16;
+    --ink: #f4f7f2;
+    --muted: #a9b8ad;
+    --accent: #facc15;
+    --accent-ink: #1c1917;
+    --good: #4ade80;
+    --bad: #f87171;
+    --line: rgba(255, 255, 255, 0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b1510; color: var(--ink);
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #app { position: fixed; inset: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .hidden { display: none !important; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: absolute; inset: 0; pointer-events: none; }
+  .board { position: absolute; left: 16px; top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px 14px; min-width: 220px; backdrop-filter: blur(6px); }
+  .score { display: flex; align-items: baseline; gap: 10px; }
+  #sc { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  #ov { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .target { font-size: 13px; color: var(--accent); margin-top: 2px; }
+  .target:empty { display: none; }
+  .bats { margin-top: 8px; display: grid; gap: 3px; font-size: 13px; }
+  .bat-row { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .bat-row.on { color: var(--ink); font-weight: 700; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .bat-row .r { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .over-wrap { position: absolute; right: 16px; top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+  .lbl { font-size: 12px; color: var(--muted); }
+  .balls { display: flex; gap: 5px; }
+  .chip { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800;
+    background: rgba(255,255,255,0.1); border: 1px solid var(--line); }
+  .chip.c4 { background: #2563eb; border-color: #2563eb; }
+  .chip.c6 { background: #9333ea; border-color: #9333ea; }
+  .chip.cW { background: #dc2626; border-color: #dc2626; }
+  .chip.empty { background: transparent; border-style: dashed; }
+  .icon-btn { pointer-events: auto; background: rgba(255,255,255,0.1); border: 1px solid var(--line); border-radius: 9px;
+    padding: 4px 9px; font-size: 12px; }
+  #ballInfo { position: absolute; left: 16px; bottom: 112px; font-size: 13px; color: #fff; background: rgba(0,0,0,0.35);
+    padding: 5px 10px; border-radius: 999px; pointer-events: none; }
+  #ballInfo:empty { display: none; }
+
+  #banner { position: absolute; left: 50%; top: 24%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; opacity: 0; }
+  #banner.show { animation: pop 1.9s ease-out forwards; }
+  #bannerMain { font-size: clamp(40px, 9vw, 96px); font-weight: 900; letter-spacing: 1px; color: #fff;
+    text-shadow: 0 4px 0 rgba(0,0,0,0.25), 0 0 30px rgba(0,0,0,0.25); line-height: 1; white-space: nowrap; }
+  #banner.six #bannerMain { color: #fde047; }
+  #banner.four #bannerMain { color: #93c5fd; }
+  #banner.out #bannerMain { color: #fca5a5; }
+  #bannerSub { margin-top: 8px; font-size: clamp(14px, 2.4vw, 20px); font-weight: 700; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+  @keyframes pop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    12% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    20% { transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+  }
+  #meter { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); width: min(260px, 60vw); height: 14px;
+    background: rgba(0,0,0,0.4); border-radius: 999px; overflow: hidden; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  #meter.show { opacity: 1; }
+  #meterFill { height: 100%; width: 0; background: linear-gradient(90deg, #22c55e, #facc15 60%, #ef4444); border-radius: 999px; }
+  #meter span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+
+  #controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    display: flex; gap: 12px; justify-content: center; pointer-events: none; }
+  #controls button { pointer-events: auto; flex: 1; max-width: 260px; padding: 14px 12px; border-radius: 16px; border: 0;
+    font-size: 17px; font-weight: 800; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.35); touch-action: manipulation; }
+  #controls button:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.35); }
+  #controls small { font-size: 11px; font-weight: 600; opacity: 0.85; }
+  #btnGround { background: #15803d; }
+  #btnLoft { background: #b45309; }
+
+  /* ---------- Overlays ---------- */
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(ellipse at center, rgba(5,15,10,0.55), rgba(5,15,10,0.85)); overflow-y: auto; }
+  .card { width: min(520px, 100%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 20px;
+    padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .card h1 { margin: 0; font-size: clamp(30px, 6vw, 42px); font-weight: 900; letter-spacing: -1px; }
+  .card h1 span { color: var(--accent); }
+  .tag { color: var(--muted); margin: 4px 0 18px; font-size: 15px; }
+  .opt { margin: 12px 0; }
+  .opt-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; font-weight: 700; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1; min-width: 60px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: rgba(255,255,255,0.05); font-weight: 700; font-size: 14px; }
+  .seg button.sel { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .primary { width: 100%; margin-top: 18px; padding: 14px; border-radius: 14px; border: 0; background: var(--accent);
+    color: var(--accent-ink); font-size: 18px; font-weight: 900; box-shadow: 0 4px 0 #a16207; }
+  .primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #a16207; }
+  .secondary { width: 100%; margin-top: 10px; padding: 11px; border-radius: 12px; border: 1px solid var(--line);
+    background: transparent; font-weight: 700; }
+  .how { margin-top: 18px; font-size: 13px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); padding-top: 14px; }
+  .how b { color: var(--ink); }
+  .kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line); background: rgba(255,255,255,0.06);
+    font-size: 12px; color: var(--ink); }
+  .best { font-size: 13px; color: var(--muted); margin-top: 10px; text-align: center; }
+  .best:empty { display: none; }
+  .result-title { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }
+  .result-score { font-size: 54px; font-weight: 900; letter-spacing: -1px; margin: 4px 0; }
+  .result-line { font-size: 18px; font-weight: 800; color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 6px; }
+  .stat { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px 6px; text-align: center; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .card table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+  .card td { padding: 5px 4px; border-bottom: 1px solid var(--line); }
+  .card td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .card td.how-out { color: var(--muted); font-size: 12px; }
+
+  @media (max-width: 640px) {
+    .board { left: 10px; top: 10px; min-width: 0; padding: 8px 10px; }
+    #sc { font-size: 24px; }
+    .over-wrap { right: 10px; top: 10px; flex-direction: column; align-items: flex-end; gap: 6px; padding: 8px; }
+    .chip { width: 22px; height: 22px; font-size: 11px; }
+    .bats { font-size: 12px; }
+    #ballInfo { bottom: 100px; left: 10px; }
+    #meter { bottom: 100px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-height: 460px) {
+    .bats { display: none; }
+    #controls button { padding: 9px; font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="board">
+      <div class="score"><span id="sc">0/0</span><span id="ov">0.0 ov</span></div>
+      <div id="target" class="target"></div>
+      <div id="bats" class="bats"></div>
+    </div>
+    <div class="over-wrap">
+      <span class="lbl">This over</span>
+      <div id="overBalls" class="balls"></div>
+      <button id="muteBtn" class="icon-btn" title="Sound (M)">Sound on</button>
+      <button id="pauseBtn" class="icon-btn" title="Pause (P)">Pause</button>
+    </div>
+  </div>
+  <div id="ballInfo"></div>
+  <div id="banner"><div id="bannerMain"></div><div id="bannerSub"></div></div>
+  <div id="meter"><div id="meterFill"></div><span>Shot power</span></div>
+
+  <div id="controls" class="hidden">
+    <button id="btnGround">Ground shot<small>Space · left-click</small></button>
+    <button id="btnLoft">Lofted shot<small>↑ · right-click</small></button>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="card">
+      <h1>Stickman <span>Cricket</span></h1>
+      <p class="tag">Time your shot. Keep it on the ground for runs, or loft it for six.</p>
+      <div class="opt"><div class="opt-label">Overs</div>
+        <div class="seg" data-key="overs"><button data-v="1">1</button><button data-v="2">2</button><button data-v="5">5</button><button data-v="10">10</button></div></div>
+      <div class="opt"><div class="opt-label">Wickets</div>
+        <div class="seg" data-key="wkts"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button></div></div>
+      <div class="opt"><div class="opt-label">Bowling</div>
+        <div class="seg" data-key="diff"><button data-v="easy">Gentle</button><button data-v="normal">Medium</button><button data-v="hard">Fast</button></div></div>
+      <div class="opt"><div class="opt-label">Mode</div>
+        <div class="seg" data-key="chase"><button data-v="0">Free hit</button><button data-v="1">Chase a target</button></div></div>
+      <button id="startBtn" class="primary">Play</button>
+      <div id="bestLine" class="best"></div>
+      <div class="how">
+        <b>How to play.</b> Swing as the ball reaches the bat. Better timing means more power.<br>
+        <span class="kbd">Space</span> / left-click: <b>ground shot</b>. Soft = 1, harder = 2 or 3, middled = <b>FOUR</b>.<br>
+        <span class="kbd">↑</span> / right-click: <b>lofted shot</b>. Middled = <b>SIX</b>, mistimed = probably caught.<br>
+        Miss a straight one and you're bowled. <span class="kbd">P</span> pause · <span class="kbd">M</span> sound.
+      </div>
+    </div>
+  </div>
+
+  <div id="gameover" class="overlay hidden">
+    <div class="card">
+      <div class="result-title" id="goTitle">Innings complete</div>
+      <div class="result-score" id="goScore">0/0</div>
+      <div class="result-line" id="goLine"></div>
+      <div class="stats">
+        <div class="stat"><b id="stRR">0.0</b><span>Run rate</span></div>
+        <div class="stat"><b id="st4">0</b><span>Fours</span></div>
+        <div class="stat"><b id="st6">0</b><span>Sixes</span></div>
+        <div class="stat"><b id="stDot">0</b><span>Dots</span></div>
+      </div>
+      <table id="goCard"></table>
+      <button id="againBtn" class="primary">Play again</button>
+      <button id="menuBtn" class="secondary">Change settings</button>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="card" style="text-align:center">
+      <h1>Paused</h1>
+      <button id="resumeBtn" class="primary">Resume</button>
+      <button id="quitBtn" class="secondary">Quit to menu</button>
+    </div>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
